@@ -1,4 +1,12 @@
-# LinearSuffixArray
-Ko and Aluru's linear time suffix array construction algorithm
+# Linear Suffix Array construction
 
-Code in v1 is the original implementation.
+AFAIK this is a straightforward implementation of the SA construction algorithm
+described in:
+
+ "Ko, Pang and Srinivas, Aluru, 
+  Linear Time Construction of Suffix Arrays (2002).
+  Computer Science Technical Reports. Paper 218."
+
+I replaced the manual management of memory buffers, the signed integer logic and
+limitation to the suffix array size, and tucked all code under its own
+namespace.
