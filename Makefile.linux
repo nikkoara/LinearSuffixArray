@@ -1,0 +1,6 @@
+# -*- mode: Makefile; -*-
+
+CXX = g++
+LD = g++
+
+MTFLAGS = -pthread
