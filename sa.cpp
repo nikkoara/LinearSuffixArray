@@ -104,33 +104,30 @@ semisort1 (ForwardIterator first, ForwardIterator last)
     return { B, b };
 }
 
-template< typename ForwardIterator, typename OutputIterator >
-void
-make_S_array (ForwardIterator first, ForwardIterator last,
-              OutputIterator out)
+template< typename T >
+tuple< vector< bool >, size_t, size_t >
+make_S_array (const T& text)
 {
     size_t c [2] = { 0 };
 
-    auto iter = first, next = first;
+    vector< bool > S (text.size ());
 
-    for (++next; next != last; ++iter, ++next) {
-        if (*iter == *next) {
-            continue;
-        }
+    for (size_t i = 0, j, n = text.size () - 1; i < n;) {
+        for (j = i; j < n && text [j] == text [j + 1]; ++j) ;
 
-        const auto b = *iter < *next;
+        assert (j < n);
+        const auto b = text [j] < text [j + 1];
 
-        for (; first != next; ++first) {
-            *out++ = b;
+        for (; i <= j; ++i) {
+            S [i] = b;
             ++c [size_t (b)];
         }
     }
 
-    const auto b = c [1] < c [0];
+    S.back () = c [1] < c [0];
+    ++c [size_t (c [1] < c [0])];
 
-    for (; first != last; ++first) {
-        *out = b;
-    }
+    return { S, c [1], c [0] };
 }
 
 template< typename ForwardIterator >
@@ -553,8 +550,10 @@ template< typename T >
 vector< size_t >
 do_make_sa (const T& text)
 {
+    size_t s, l;
     vector< bool > S;
-    make_S_array (begin (text), end (text), back_inserter (S));
+
+    tie (S, s, l) = make_S_array (text);
 
     vector< size_t > B;
     vector< bool > b;
