@@ -105,7 +105,7 @@ semisort1 (ForwardIterator first, ForwardIterator last)
 }
 
 template< typename T >
-tuple< vector< bool >, size_t, size_t >
+tuple< vector< bool >, size_t >
 make_S_array (const T& text)
 {
     size_t c [2] = { 0 };
@@ -127,7 +127,7 @@ make_S_array (const T& text)
     S.back () = c [1] < c [0];
     ++c [size_t (c [1] < c [0])];
 
-    return { S, c [1], c [0] };
+    return { S, c [size_t (S.back ())] };
 }
 
 template< typename ForwardIterator >
@@ -187,10 +187,9 @@ static tuple< vector< size_t >, vector< bool > >
 make_substrings_array (
     const vector< size_t >& A,
     const vector< bool >& a,
-    const vector< bool >& S)
+    const vector< bool >& S,
+    size_t n)
 {
-    const auto n = count (S.begin (), S.end (), S.back ());
-
     vector< size_t > B (n, 0);
     vector< bool > b (n, false);
 
@@ -249,9 +248,8 @@ S_distance (const vector< bool >& S)
 }
 
 static tuple< vector< size_t >, vector< bool > >
-make_mlists (vector< size_t >& A,
-             const vector< bool >& a,
-             const vector< bool >& S)
+make_bucket_list (
+    vector< size_t >& A, const vector< bool >& a, const vector< bool >& S)
 {
     vector< size_t > sdist, cdist;
     tie (sdist, cdist) = S_distance (S);
@@ -304,17 +302,12 @@ make_mlists (vector< size_t >& A,
     return { M, m };
 }
 
-template< typename T >
-tuple< vector< size_t >, vector< bool > >
-sort_S_substrings (const T& text, const vector< bool >& S)
+static void
+bucketsort_S_substrings (
+    vector< size_t >& B, vector< bool >& b,
+    const vector< bool >& S,
+    const vector< size_t >& M, const vector< bool >& m)
 {
-    vector< size_t > A, B, M;
-    vector< bool > a, b, m;
-
-    tie (A, a) = semisort1 (text.begin (), text.end ());
-    tie (B, b) = make_substrings_array (A, a, S);
-    tie (M, m) = make_mlists (A, a, S);
-
     vector< size_t > Rev (S.size (), npos);
     vector< size_t > L (B.size (), npos);
 
@@ -366,27 +359,14 @@ sort_S_substrings (const T& text, const vector< bool >& S)
             B [L [bucket]++] = i;
         }
     }
-
-    return { B, b };
 }
 
-template< typename T >
-tuple< vector< size_t >, vector< bool > >
-sort_L_substrings (const T& text, const vector< bool >& S)
+static void
+bucketsort_L_substrings (
+    vector< size_t >& B, vector< bool >& b,
+    const vector< bool >& S,
+    const vector< size_t >& M, const vector< bool >& m)
 {
-    vector< size_t > A, B, M;
-    vector< bool > a, b, m;
-
-    tie (A, a) = semisort1 (text.begin (), text.end ());
-    tie (B, b) = make_substrings_array (A, a, S);
-
-    reverse (A.begin (), A.end ());
-    reverse (a.begin (), a.end ());
-
-    copy (a.begin () + 1, a.end (), a.begin ());
-
-    tie (M, m) = make_mlists (A, a, S);
-
     vector< size_t > Rev (S.size (), npos);
     vector< size_t > R (B.size (), npos);
 
@@ -435,12 +415,42 @@ sort_L_substrings (const T& text, const vector< bool >& S)
             B [R [n]--] = i;
         }
     }
-
-    return { B, b };
 }
 
-static vector< size_t >
-remap_suffixes (vector< size_t > B, const vector< bool >& S)
+template< typename T >
+tuple< vector< size_t >, vector< bool >, vector< bool > >
+bucketsort_substrings (const T& text)
+{
+    size_t n;
+    vector< bool > S;
+
+    tie (S, n) = make_S_array (text);
+
+    vector< size_t > A, B, M;
+    vector< bool > a, b, m;
+
+    tie (A, a) = semisort1 (text.begin (), text.end ());
+    tie (B, b) = make_substrings_array (A, a, S, n);
+
+    if (!S.back ()) {
+        reverse (A.begin (), A.end ());
+        reverse (a.begin (), a.end ());
+
+        copy (a.begin () + 1, a.end (), a.begin ());
+    }
+
+    tie (M, m) = make_bucket_list (A, a, S);
+
+    if (S.back ())
+        bucketsort_S_substrings (B, b, S, M, m);
+    else
+        bucketsort_L_substrings (B, b, S, M, m);
+
+    return { B, b, S };
+}
+
+static void
+remap_suffixes (vector< size_t >& B, const vector< bool >& S)
 {
     vector< size_t > arr;
 
@@ -453,8 +463,6 @@ remap_suffixes (vector< size_t > B, const vector< bool >& S)
     for (size_t i = 0; i < B.size (); ++i) {
         B [i] = arr [B [i]];
     }
-
-    return B;
 }
 
 template< typename T >
@@ -546,30 +554,31 @@ make_L_sa (const vector< size_t >& B, const T& text, const vector< bool >& S)
     return sa;
 }
 
+
 template< typename T >
-vector< size_t >
-do_make_sa (const T& text)
+inline vector< size_t >
+make_sa (const vector< size_t >& B, const T& text, const vector< bool >& S)
 {
-    size_t s, l;
-    vector< bool > S;
-
-    tie (S, s, l) = make_S_array (text);
-
-    vector< size_t > B;
-    vector< bool > b;
-
-    tie (B, b) = S.back ()
-        ? sort_S_substrings (text, S)
-        : sort_L_substrings (text, S);
-
-    if (!all_of (b.begin (), b.end (), [](auto x) { return x; })) {
-        B = do_make_sa (make_T_ (B, b, S));
-        B = remap_suffixes (B, S);
-    }
-
     return S.back ()
         ? make_S_sa (B, text, S)
         : make_L_sa (B, text, S);
+}
+
+template< typename T >
+vector< size_t >
+make_sa (const T& text)
+{
+    vector< size_t > B;
+    vector< bool > b, S;
+
+    tie (B, b, S) = bucketsort_substrings (text);
+
+    if (!all_of (b.begin (), b.end (), [](auto x) { return x; })) {
+        B = make_sa (make_T_ (B, b, S));
+        remap_suffixes (B, S);
+    }
+
+    return make_sa (B, text, S);
 }
 
 } // namespace detail
@@ -577,7 +586,7 @@ do_make_sa (const T& text)
 std::vector< size_t >
 make_sa (const std::string& text)
 {
-    return detail::do_make_sa (text);
+    return detail::make_sa (text);
 }
 
 } // namespace ka
